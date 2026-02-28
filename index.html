@@ -6,23 +6,18 @@
   <title>회전체 만들기</title>
   <link rel="icon" href="data:," />
 
-  <!-- Tailwind CDN -->
   <script src="https://cdn.tailwindcss.com"></script>
-
-  <!-- React 18 + ReactDOM CDN -->
   <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
   <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
-
-  <!-- Babel (JSX in browser) -->
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-
-  <!-- Three.js CDN -->
   <script src="https://unpkg.com/three@0.160.0/build/three.min.js"></script>
 
   <style>
-    /* Tailwind 커스텀 클래스 대체 */
     @keyframes spinSlow { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
     .animate-spin-slow { animation: spinSlow 2.5s linear infinite; }
+    input[type="color"] { -webkit-appearance: none; border: none; padding: 0; background: transparent; }
+    input[type="color"]::-webkit-color-swatch-wrapper { padding: 0; }
+    input[type="color"]::-webkit-color-swatch { border: 1px solid rgba(148,163,184,.6); border-radius: 10px; }
   </style>
 </head>
 <body class="bg-slate-50">
@@ -33,7 +28,6 @@
 
     /* =========================
       Lucide 대체: 최소 SVG 아이콘
-      (이 부분만 import 대체용)
     ========================== */
     function IconBase({ children, size = 16, className = "" }) {
       return (
@@ -53,7 +47,6 @@
         </svg>
       );
     }
-
     const Trash2 = ({ size = 16, className = "" }) => (
       <IconBase size={size} className={className}>
         <path d="M3 6h18" />
@@ -63,14 +56,12 @@
         <path d="M14 11v6" />
       </IconBase>
     );
-
     const Undo = ({ size = 16, className = "" }) => (
       <IconBase size={size} className={className}>
         <path d="M9 14l-4-4 4-4" />
         <path d="M5 10h9a5 5 0 1 1 0 10h-3" />
       </IconBase>
     );
-
     const Box = ({ size = 24, className = "" }) => (
       <IconBase size={size} className={className}>
         <path d="M21 16V8a2 2 0 0 0-1-1.73L13 2.27a2 2 0 0 0-2 0L4 6.27A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" />
@@ -78,13 +69,11 @@
         <path d="M12 22V12" />
       </IconBase>
     );
-
     const MousePointer2 = ({ size = 32, className = "" }) => (
       <IconBase size={size} className={className}>
         <path d="M4 3l7 18 2.5-7.5L21 11 4 3z" />
       </IconBase>
     );
-
     const Wand2 = ({ size = 12, className = "" }) => (
       <IconBase size={size} className={className}>
         <path d="M15 4l5 5" />
@@ -94,7 +83,6 @@
         <path d="M21 3l-3 3" />
       </IconBase>
     );
-
     const Magnet = ({ size = 12, className = "" }) => (
       <IconBase size={size} className={className}>
         <path d="M6 3v7a6 6 0 0 0 12 0V3" />
@@ -104,23 +92,32 @@
     );
 
     /* =========================
-      App (원본 로직 유지)
+      색상 프리셋 (기본값: 적당한 색)
+    ========================== */
+    const DEFAULT_MODEL_COLOR = "#3b82f6"; // blue-500
+    const DEFAULT_BG_COLOR = "#0f172a";    // slate-900
+
+    /* =========================
+      App (원본 로직 유지 + 색상 UI만 추가)
     ========================== */
     function App() {
       // --- 상수 ---
       const CANVAS_SIZE = 400;
-      const CENTER_X = CANVAS_SIZE / 2; // 회전축 (x=200)
-      const SNAP_THRESHOLD = 10; // 스냅 거리 (px)
-      const STRAIGHT_TOLERANCE = 6; // 직선 보정 허용 오차 (px)
+      const CENTER_X = CANVAS_SIZE / 2;
+      const SNAP_THRESHOLD = 10;
+      const STRAIGHT_TOLERANCE = 6;
 
       // --- 상태 관리 ---
-      const [points, setPoints] = useState([]); // 전체 좌표 점들
-      const [strokeHistory, setStrokeHistory] = useState([]); // 각 획(Stroke) 정보 기록
-      const [show3D, setShow3D] = useState(false); // 3D 뷰 활성화 여부
-      const [isAutoSnap, setIsAutoSnap] = useState(true); // 자동 스냅 켜기/끄기
-      const [isStraight, setIsStraight] = useState(true); // 직선 보정 켜기/끄기
+      const [points, setPoints] = useState([]);
+      const [strokeHistory, setStrokeHistory] = useState([]);
+      const [show3D, setShow3D] = useState(false);
+      const [isAutoSnap, setIsAutoSnap] = useState(true);
+      const [isStraight, setIsStraight] = useState(true);
 
-      // Ref를 사용하여 이벤트 핸들러 내에서 최신 상태 조회
+      // ★ 추가: 3D 색상 상태
+      const [modelColor, setModelColor] = useState(DEFAULT_MODEL_COLOR);
+      const [bgColor, setBgColor] = useState(DEFAULT_BG_COLOR);
+
       const pointsRef = useRef([]);
       const isDrawing = useRef(false);
       const currentStrokeCount = useRef(0);
@@ -135,7 +132,6 @@
           return next;
         });
       };
-
       const toggleAutoSnap = () => {
         setIsAutoSnap(prev => {
           const next = !prev;
@@ -144,12 +140,8 @@
         });
       };
 
-      // 상태 동기화
-      useEffect(() => {
-        pointsRef.current = points;
-      }, [points]);
+      useEffect(() => { pointsRef.current = points; }, [points]);
 
-      // ★ 다중 획(떨어진 선들)을 분리해주는 로직
       const strokes = useMemo(() => {
         const result = [];
         let currentIndex = 0;
@@ -157,35 +149,27 @@
           result.push(points.slice(currentIndex, currentIndex + count));
           currentIndex += count;
         }
-        // 현재 그리고 있는(완료되지 않은) 획 추가
-        if (currentIndex < points.length) {
-          result.push(points.slice(currentIndex));
-        }
+        if (currentIndex < points.length) result.push(points.slice(currentIndex));
         return result;
       }, [points, strokeHistory]);
 
-      // --- 유틸리티: 스냅 계산 ---
       const getSnappedCoordinate = (x, y, currentPoints, isStart = false) => {
         let snappedX = x;
         let snappedY = y;
         let isSnapped = false;
 
-        // 1. 회전축(Axis) 스냅
         if (Math.abs(snappedX - CENTER_X) <= SNAP_THRESHOLD) {
           snappedX = CENTER_X;
           isSnapped = true;
         }
 
-        // 2. 기존 점 스냅
         if (currentPoints.length > 0) {
-          // (1) 처음 시작점 스냅 (도형 닫기)
           const firstP = currentPoints[0];
           const distToFirst = Math.hypot(snappedX - firstP.x, snappedY - firstP.y);
           if (distToFirst <= SNAP_THRESHOLD) {
             return { x: firstP.x, y: firstP.y, isSnapped: true };
           }
 
-          // (2) 직전 선의 끝점 스냅 (선 이어 그리기)
           if (isStart) {
             const lastP = currentPoints[currentPoints.length - 1];
             const distToLast = Math.hypot(snappedX - lastP.x, snappedY - lastP.y);
@@ -198,7 +182,6 @@
         return { x: snappedX, y: snappedY, isSnapped };
       };
 
-      // --- 유틸리티: 직선 보정 ---
       const straightenStroke = (strokePoints) => {
         if (strokePoints.length < 3) return strokePoints;
 
@@ -209,7 +192,6 @@
         const B = end.x - start.x;
         const C = start.x * end.y - end.x * start.y;
         const len = Math.hypot(A, B);
-
         if (len === 0) return strokePoints;
 
         let maxDev = 0;
@@ -218,14 +200,10 @@
           if (dist > maxDev) maxDev = dist;
         }
 
-        if (maxDev < STRAIGHT_TOLERANCE) {
-          return [start, end];
-        }
-
+        if (maxDev < STRAIGHT_TOLERANCE) return [start, end];
         return strokePoints;
       };
 
-      // --- 핸들러: 2D 드로잉 ---
       const getCoordinates = (e) => {
         const clientX = e.touches ? e.touches[0].clientX : e.clientX;
         const clientY = e.touches ? e.touches[0].clientY : e.clientY;
@@ -235,30 +213,23 @@
 
       const startDrawing = (e) => {
         let { x, y } = getCoordinates(e);
-
         x = Math.min(x, CENTER_X);
 
         let initialPoints = [];
-
-        // ★ 자동 스냅 켜짐: 띄워서 클릭해도 이전 점과 강제로 선을 연결합니다 ("아까처럼")
         if (isAutoSnapRef.current && pointsRef.current.length > 0) {
           const lastP = pointsRef.current[pointsRef.current.length - 1];
           initialPoints.push({ x: lastP.x, y: lastP.y });
         }
 
-        // 스냅 적용 (토글이 켜져있을 때만)
         if (isAutoSnapRef.current) {
           const snapped = getSnappedCoordinate(x, y, pointsRef.current, true);
-          x = snapped.x;
-          y = snapped.y;
+          x = snapped.x; y = snapped.y;
         }
 
         isDrawing.current = true;
         setShow3D(false);
 
         const newPoint = { x, y };
-
-        // 이전 점과 완전히 같은 위치가 아닐 때만 현재 클릭한 점을 추가합니다.
         if (
           initialPoints.length === 0 ||
           initialPoints[0].x !== newPoint.x ||
@@ -277,7 +248,6 @@
       const draw = (e) => {
         if (!isDrawing.current) return;
         let { x, y } = getCoordinates(e);
-
         x = Math.min(x, CENTER_X);
 
         if (lastPoint.current) {
@@ -308,18 +278,13 @@
           if (isAutoSnapRef.current) {
             const lastP = strokePoints[strokePoints.length - 1];
             const snappedEnd = getSnappedCoordinate(
-              lastP.x,
-              lastP.y,
-              currentTotalPoints.slice(0, startIndex),
-              false
+              lastP.x, lastP.y, currentTotalPoints.slice(0, startIndex), false
             );
             strokePoints[strokePoints.length - 1] = { x: snappedEnd.x, y: snappedEnd.y };
           }
 
           let finalPoints = strokePoints;
-          if (isStraightRef.current) {
-            finalPoints = straightenStroke(strokePoints);
-          }
+          if (isStraightRef.current) finalPoints = straightenStroke(strokePoints);
 
           const newTotalPoints = [
             ...currentTotalPoints.slice(0, startIndex),
@@ -334,7 +299,6 @@
         currentStrokeCount.current = 0;
       };
 
-      // --- 기본 도형 프리셋 ---
       const drawRect = () => {
         const newPoints = [
           { x: 200, y: 100 },
@@ -396,6 +360,14 @@
         }
         setShow3D(true);
       };
+
+      // ★ 추가: 간단 프리셋 버튼
+      const presets = [
+        { name: "파랑/슬레이트", model: "#3b82f6", bg: "#0f172a" },
+        { name: "민트/딥그린", model: "#14b8a6", bg: "#052e2b" },
+        { name: "오렌지/네이비", model: "#f97316", bg: "#0b1020" },
+        { name: "퍼플/차콜", model: "#a855f7", bg: "#111827" },
+      ];
 
       return (
         <div className="flex flex-col items-center w-full min-h-screen bg-slate-50 p-4 font-sans text-slate-800">
@@ -466,7 +438,6 @@
                   회전축
                 </div>
 
-                {/* ★ 변경된 부분: 획(strokes)마다 독립적인 선(polyline)을 그림 */}
                 <svg className="absolute top-0 left-0 w-full h-full pointer-events-none z-20">
                   {strokes.map((stroke, index) => (
                     <polyline
@@ -479,7 +450,6 @@
                       strokeLinejoin="round"
                     />
                   ))}
-
                   {points.map((p, i) => (
                     <circle key={`p-${i}`} cx={p.x} cy={p.y} r={2} fill="#2563eb" />
                   ))}
@@ -533,9 +503,67 @@
             </div>
 
             {/* --- 3D 뷰어 영역 --- */}
-            <div className="flex flex-col items-center">
+            <div className="flex flex-col items-center w-full lg:w-auto">
               <div className="mb-2 font-semibold text-lg flex items-center gap-2">
                 <span>2단계: 결과 확인</span>
+              </div>
+
+              {/* ★ 추가: 색상 컨트롤 패널 */}
+              <div className="w-full max-w-[400px] lg:max-w-none mb-3">
+                <div className="bg-white border border-slate-200 rounded-xl shadow-sm px-3 py-2 flex flex-col gap-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="text-xs font-semibold text-slate-600">3D 색상 설정</div>
+                    <div className="flex gap-2">
+                      {presets.map((p) => (
+                        <button
+                          key={p.name}
+                          onClick={() => { setModelColor(p.model); setBgColor(p.bg); }}
+                          className="text-[11px] px-2 py-1 rounded-lg border border-slate-200 hover:bg-slate-50"
+                          title={p.name}
+                        >
+                          {p.name}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-between gap-3">
+                    <label className="flex items-center gap-2 text-xs text-slate-600">
+                      회전체 색
+                      <input
+                        type="color"
+                        value={modelColor}
+                        onChange={(e) => setModelColor(e.target.value)}
+                        className="w-10 h-8 rounded-lg"
+                        aria-label="회전체 색 선택"
+                      />
+                      <span className="font-mono text-[11px] text-slate-500">{modelColor}</span>
+                    </label>
+
+                    <label className="flex items-center gap-2 text-xs text-slate-600">
+                      배경색
+                      <input
+                        type="color"
+                        value={bgColor}
+                        onChange={(e) => setBgColor(e.target.value)}
+                        className="w-10 h-8 rounded-lg"
+                        aria-label="배경색 선택"
+                      />
+                      <span className="font-mono text-[11px] text-slate-500">{bgColor}</span>
+                    </label>
+
+                    <button
+                      onClick={() => { setModelColor(DEFAULT_MODEL_COLOR); setBgColor(DEFAULT_BG_COLOR); }}
+                      className="text-xs px-3 py-2 rounded-lg bg-slate-100 hover:bg-slate-200"
+                    >
+                      기본값
+                    </button>
+                  </div>
+
+                  <div className="text-[11px] text-slate-500">
+                    ※ 색을 바꾸면 3D 화면에 바로 반영돼요.
+                  </div>
+                </div>
               </div>
 
               <div
@@ -543,7 +571,13 @@
                 style={{ width: CANVAS_SIZE, height: CANVAS_SIZE }}
               >
                 {show3D ? (
-                  <ThreeScene strokes={strokes} canvasSize={CANVAS_SIZE} centerX={CENTER_X} />
+                  <ThreeScene
+                    strokes={strokes}
+                    canvasSize={CANVAS_SIZE}
+                    centerX={CENTER_X}
+                    modelColor={modelColor}
+                    bgColor={bgColor}
+                  />
                 ) : (
                   <div className="w-full h-full flex flex-col items-center justify-center text-slate-500">
                     <Box size={48} className="mb-2 opacity-20" />
@@ -564,7 +598,6 @@
       );
     }
 
-    // --- 보조 컴포넌트: 그리드 배경 ---
     function GridBackground({ size }) {
       const step = 40;
       const lines = [];
@@ -582,18 +615,18 @@
       );
     }
 
-    // --- 핵심 컴포넌트: Three.js 씬 ---
-    function ThreeScene({ strokes, canvasSize, centerX }) {
+    function ThreeScene({ strokes, canvasSize, centerX, modelColor, bgColor }) {
       const mountRef = useRef(null);
       const sceneRef = useRef(null);
-      const groupRef = useRef(null); // 메쉬 그룹 관리
+      const groupRef = useRef(null);
       const animationProgress = useRef(0);
 
       useEffect(() => {
         if (!mountRef.current) return;
 
         const scene = new THREE.Scene();
-        scene.background = new THREE.Color(0x0f172a);
+        // ★ 배경색 반영
+        scene.background = new THREE.Color(bgColor);
         sceneRef.current = scene;
 
         const camera = new THREE.PerspectiveCamera(50, 1, 0.1, 1000);
@@ -613,7 +646,6 @@
         backLight.position.set(-20, -20, -20);
         scene.add(backLight);
 
-        // ★ 변경된 부분: 분리된 획(strokes)마다 개별적으로 3D 객체(Mesh)를 생성하여 묶음(Group)
         const createLathe = (maxAngle) => {
           if (groupRef.current) {
             groupRef.current.children.forEach(child => {
@@ -638,8 +670,10 @@
             });
 
             const geometry = new THREE.LatheGeometry(threePoints, 32, 0, maxAngle);
+
+            // ★ 회전체 색 반영
             const material = new THREE.MeshPhongMaterial({
-              color: 0x3b82f6,
+              color: new THREE.Color(modelColor),
               side: THREE.DoubleSide,
               flatShading: false,
               shininess: 80,
@@ -650,7 +684,11 @@
             group.add(mesh);
 
             const wfGeo = new THREE.WireframeGeometry(geometry);
-            const wfMat = new THREE.LineBasicMaterial({ color: 0x93c5fd, transparent: true, opacity: 0.2 });
+            const wfMat = new THREE.LineBasicMaterial({
+              color: new THREE.Color(modelColor),
+              transparent: true,
+              opacity: 0.18
+            });
             const wireframe = new THREE.LineSegments(wfGeo, wfMat);
             group.add(wireframe);
           });
@@ -765,12 +803,11 @@
           canvas.removeEventListener('touchend', onTouchEnd);
           if (mountRef.current) mountRef.current.removeChild(renderer.domElement);
         };
-      }, [strokes, canvasSize, centerX]);
+      }, [strokes, canvasSize, centerX, modelColor, bgColor]); // ★ 색 바뀌면 재렌더
 
       return <div ref={mountRef} className="w-full h-full cursor-move touch-none" />;
     }
 
-    // Render
     const root = ReactDOM.createRoot(document.getElementById("root"));
     root.render(<App />);
   </script>
